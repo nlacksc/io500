@@ -1,5 +1,6 @@
 results/
 build/
+/schema-tools
 out/
 bin/
 core
