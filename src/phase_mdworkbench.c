@@ -33,7 +33,7 @@ static void validate(void){
 
 
 void mdworkbench_process(u_argv_t * argv, FILE * out, mdworkbench_results_t ** res_out){
-  mdworkbench_results_t * res = md_workbench_run(argv->size, argv->vector, MPI_COMM_WORLD, out);
+  mdworkbench_results_t * res = md_workbench_run(argv->size, argv->vector, opt.run_com, out);
   u_res_file_close(out);
   u_argv_free(argv);
 
@@ -73,11 +73,11 @@ void mdworkbench_add_params(u_argv_t * argv, int is_create){
     files_per_proc = d->files_per_proc;
   }else{
     mdtest_generic_res* mdtest = mdtest_easy_write_get_result();
-    MPI_Bcast(& mdtest->rate, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(& mdtest->rate, 1, MPI_DOUBLE, 0, opt.run_com);
 
     char file[PATH_MAX];
     sprintf(file, "%s/mdworkbench-size", opt.resdir);
-    if (is_create && opt.rank == 0){
+    if (is_create && opt.run_rank == 0){
       // store the actual processed size, allows easy deletion
       FILE * f = fopen(file, "w");
       if(! f){
@@ -89,7 +89,7 @@ void mdworkbench_add_params(u_argv_t * argv, int is_create){
     }
     if(! is_create && mdtest->rate <= 0.0){
       // read the size back as this is a deletion run
-      if(opt.rank == 0){
+      if(opt.run_rank == 0){
         FILE * f = fopen(file, "r");
         if(! f){
           WARNING("Couldn't open mdworkbench-file: %s\n", file);
@@ -98,17 +98,17 @@ void mdworkbench_add_params(u_argv_t * argv, int is_create){
         }
         fclose(f);
       }
-      MPI_Bcast(& mdtest->rate, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+      MPI_Bcast(& mdtest->rate, 1, MPI_DOUBLE, 0, opt.run_com);
     }
     if( mdtest->rate <= 0.0 ){
-      if(opt.rank == 0){
+      if(opt.run_rank == 0){
         WARNING("MDWorkbench uses the MDTest rates to determine suitable options but MDTest didn't run, will use a low (and sane) default instead\n");
       }
       mdtest->rate = 10.0;
     }
     // run for 60s
     int time = opt.stonewall < 60 ? opt.stonewall : 60;
-    precreate_per_set = (uint64_t) (mdtest->rate * time * 1000 / opt.mpi_size) / 10;
+    precreate_per_set = (uint64_t) (mdtest->rate * time * 1000 / opt.run_mpi_size) / 10;
 
     files_per_proc = precreate_per_set;
   }

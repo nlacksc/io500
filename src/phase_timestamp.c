@@ -12,7 +12,7 @@ static void validate(void){
 }
 
 static double run(void){
-  if(opt.rank != 0) return 0;
+  if(opt.run_rank != 0) return 0;
 
   char timestamp_file[PATH_MAX];
   sprintf(timestamp_file, "%s/timestampfile", opt.resdir);

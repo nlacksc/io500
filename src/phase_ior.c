@@ -3,14 +3,14 @@
 
 
 double ior_process_write(u_argv_t * argv, FILE * out, IOR_point_t ** res_out){
-  IOR_test_t * test = ior_run(argv->size, argv->vector, MPI_COMM_WORLD, out);
+  IOR_test_t * test = ior_run(argv->size, argv->vector, opt.run_com, out);
   assert(test);
   IOR_results_t * res = test->results;
   assert(res);
   u_res_file_close(out);
   u_argv_free(argv);
 
-  if(opt.rank != 0){
+  if(opt.run_rank != 0){
     return 0;
   }
 
@@ -25,14 +25,14 @@ double ior_process_write(u_argv_t * argv, FILE * out, IOR_point_t ** res_out){
   }
   INFO_PAIR("accessed-pairs", "%zu\n", p->pairs_accessed);
 
-  PRINT_PAIR("throughput-stonewall","%.2f\n", p->stonewall_avg_data_accessed * opt.mpi_size / p->stonewall_time / GIBIBYTE);
+  PRINT_PAIR("throughput-stonewall","%.2f\n", p->stonewall_avg_data_accessed * opt.run_mpi_size / p->stonewall_time / GIBIBYTE);
   double tp = p->aggFileSizeForBW / p->time / GIBIBYTE;
 
   return tp;
 }
 
 double ior_process_read(u_argv_t * argv, FILE * out, IOR_point_t ** res_out){
-  IOR_results_t * res = ior_run(argv->size, argv->vector, MPI_COMM_WORLD, out)->results;
+  IOR_results_t * res = ior_run(argv->size, argv->vector, opt.run_com, out)->results;
   u_res_file_close(out);
   u_argv_free(argv);
 

@@ -1,7 +1,7 @@
 #include <phase_mdtest.h>
 
 void p_mdtest_run(u_argv_t * argv, FILE * out, mdtest_generic_res * d, mdtest_test_num_t test){
-  mdtest_results_t * res = mdtest_run(argv->size, argv->vector, MPI_COMM_WORLD, out);
+  mdtest_results_t * res = mdtest_run(argv->size, argv->vector, opt.run_com, out);
   d->time = res->time[test];
   INFO_PAIR("time", "%f\n", d->time);
   d->items = res->items[test];

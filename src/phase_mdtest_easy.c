@@ -19,7 +19,7 @@ static void validate(void){
 }
 
 static void cleanup(void){
-  if( ! opt.dry_run && opt.rank == 0){
+  if( ! opt.dry_run && opt.run_rank == 0){
     char filename[PATH_MAX];
     sprintf(filename, "%s/mdtest-easy.stonewall", opt.resdir);
     unlink(filename);

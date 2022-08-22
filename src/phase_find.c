@@ -13,7 +13,7 @@ static opt_find of;
 static double run(void){
   if(of.run == 0) return 0.0;
 
-  if(opt.rank == 0){
+  if(opt.run_rank == 0){
     // check the existance of the timestamp file just for correctness
     char timestamp_file[PATH_MAX];
     sprintf(timestamp_file, "%s/timestampfile", opt.resdir);
@@ -86,8 +86,8 @@ double run_find(const char * phase_name, opt_find * of){
 
     //WARNING("Running the external script with nproc=%d\n", );
     // only one process runs the external find
-    if(opt.rank != 0){
-      MPI_Barrier(MPI_COMM_WORLD);
+    if(opt.run_rank != 0){
+      MPI_Barrier(opt.run_com);
       return 0;
     }
 
@@ -143,7 +143,7 @@ double run_find(const char * phase_name, opt_find * of){
 
     PRINT_PAIR("found", "%"PRIu64"\n", of->found_files);
 
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(opt.run_com);
     return performance;
 }
 
@@ -202,7 +202,7 @@ void external_find_prepare_arguments(char * args, opt_find * of){
   sprintf(command, "%s %s %s %s", of->ext_mpi, of->ext_find, of->ext_args, args);
   of->command = strdup(command);
 
-  if(of->nproc != opt.mpi_size && of->nproc != 1 && of->nproc != INI_UNSET_UINT){
+  if(of->nproc != opt.run_mpi_size && of->nproc != 1 && of->nproc != INI_UNSET_UINT){
     WARNING("An external-script will always be run with nproc=1, note that some MPI implementations do not support to run MPI programs from an MPI program\n");
   }
 }
@@ -212,10 +212,10 @@ void pfind_prepare_arguments(u_argv_t * argv, opt_find * of){
       WARNING("Using internal pfind, will ignore any arguments to the external script\n");
     }
 
-    MPI_Comm com = MPI_COMM_WORLD;
+    MPI_Comm com = opt.run_com;
     if(of->nproc != INI_UNSET_UINT){
-      int color = opt.rank < of->nproc;
-      int ret = MPI_Comm_split(MPI_COMM_WORLD, color, opt.rank, & com);
+      int color = opt.run_rank < of->nproc;
+      int ret = MPI_Comm_split(opt.run_com, color, opt.run_rank, & com);
       MPI_Comm_size(com, & ret);
       DEBUG_INFO("Configuring pfind to run with %d procs\n", ret);
       if(color && of->nproc != ret){

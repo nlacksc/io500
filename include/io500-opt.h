@@ -27,6 +27,10 @@ typedef struct{
 
   int rank;
   int mpi_size;
+  int run_rank;
+  int run_mpi_size;
+  int parallel_runs;
+  int run;
   int io_buffers_on_gpu; /* are the I/O buffers to be allocated on a GPU */
 
   char * api;
@@ -39,6 +43,8 @@ typedef struct{
   int scc;
   int minwrite;
   io500_mode mode;
+
+  MPI_Comm run_com;
 
   aiori_xfer_hint_t backend_hints;
   aiori_mod_opt_t * backend_opt;

@@ -80,7 +80,7 @@ void u_purge_file(char const * file){
 }
 
 void u_create_datadir(char const * dir){
-  if(opt.rank != 0){
+  if(opt.run_rank != 0){
     return;
   }
   char d[PATH_MAX];
@@ -238,7 +238,7 @@ void u_print_timestamp(FILE * out){
 
 FILE * u_res_file_prep(char const * name){
   FILE * out = stdout;
-  if(opt.rank == 0){
+  if(opt.run_rank == 0){
     char fname[PATH_MAX];
     sprintf(fname, "%s/%s.txt", opt.resdir, name);
     INFO_PAIR("result-file", "%s\n", fname);
@@ -251,7 +251,7 @@ FILE * u_res_file_prep(char const * name){
 }
 
 void u_res_file_close(FILE * out){
-  if(opt.rank == 0){
+  if(opt.run_rank == 0){
     fclose(out);
     out_logfile = stdout;
   }

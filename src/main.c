@@ -13,7 +13,7 @@
 
 #include <phase-definitions.h>
 
-#define INVALID_RUN(...) do{ if (opt.rank == 0){fprintf(file_out, "; ERROR INVALID "__VA_ARGS__); printf("ERROR INVALID (%s:%d) ", __FILE__, __LINE__); printf(__VA_ARGS__); fflush(file_out); opt.is_valid_run = 0; } }while(0);
+#define INVALID_RUN(...) do{ if (opt.run_rank == 0){fprintf(file_out, "; ERROR INVALID "__VA_ARGS__); if(opt.parallel_runs==1){printf("ERROR INVALID (%s:%d) ", __FILE__, __LINE__);}else{printf("ERROR INVALID (Run %d, %s:%d) ", opt.run, __FILE__, __LINE__);} printf(__VA_ARGS__); fflush(file_out); opt.is_valid_run = 0; } }while(0);
 
 #define RUN_PHASE(phase) ( ! (phase->type & IO500_PHASE_FLAG_OPTIONAL && opt.mode == IO500_MODE_STANDARD) )
 
@@ -106,14 +106,23 @@ static void prepare_aiori(void){
     opt.datadir = strdup(resdir);
   }
 
-  if(opt.rank == 0){
+  if(opt.parallel_runs>1){
+    char resdir[PATH_MAX];
+    sprintf(resdir, "%s/run_%d", opt.resdir, opt.run);
+    opt.resdir = strdup(resdir);
+    char datadir[PATH_MAX];
+    sprintf(datadir, "%s/run_%d", opt.datadir, opt.run);
+    opt.datadir = strdup(datadir);
+  }
+
+  if(opt.run_rank == 0){
     ior_aiori_t const * posix = aiori_select("POSIX");
     u_create_dir_recursive(opt.resdir, posix, NULL);
   }
 }
 
 static void print_cfg_hash(FILE * out, ini_section_t ** cfg){
-  if(opt.rank == 0){
+  if(opt.run_rank == 0){
     PRINT_PAIR_HEADER("config-hash");
     uint32_t hash = u_ini_gen_hash(cfg);
     u_hash_print(out, hash);
@@ -121,7 +130,7 @@ static void print_cfg_hash(FILE * out, ini_section_t ** cfg){
   }
 }
 
-#define dupprintf(...) do{ if(opt.rank == 0) { fprintf(res_summary, __VA_ARGS__); printf(__VA_ARGS__); } }while(0);
+#define dupprintf(...) do{ if(opt.run_rank == 0) { fprintf(res_summary, __VA_ARGS__); if(opt.parallel_runs!=1){printf("Run %d", opt.run);} printf(__VA_ARGS__); } }while(0);
 
 static double calc_score(double scores[IO500_SCORE_LAST], int extended, uint32_t * hash){
   double overall_score = 1;
@@ -281,6 +290,38 @@ int main(int argc, char ** argv){
     goto help;
   }
 
+  if(opt.parallel_runs==1){
+    opt.run_com = MPI_COMM_WORLD;
+    opt.run_rank = opt.rank;
+    opt.run_mpi_size = opt.mpi_size;
+    opt.run = 0;
+  } else if(opt.parallel_runs>1) {
+    if(opt.parallel_runs>opt.mpi_size){
+      FATAL("Cannot do %d runs with only %d process(es).\n", opt.parallel_runs, opt.mpi_size);
+    }
+    int idle_processes = opt.mpi_size % opt.parallel_runs;
+    if(idle_processes != 0){
+      WARNING("MPI world size (%d) is not divisible by number of parallel runs (%d), %d process(es) will be idle\n", opt.mpi_size, opt.parallel_runs,  idle_processes);
+    }
+    opt.run = opt.rank % opt.parallel_runs;
+    if(opt.rank >= opt.mpi_size-idle_processes){
+      opt.run = MPI_UNDEFINED;
+    }
+    MPI_Comm_split(MPI_COMM_WORLD, opt.run, opt.rank, & opt.run_com);
+    if(opt.run_com == MPI_COMM_NULL){
+      opt.run_rank = -1;
+      opt.run_mpi_size = 0;
+      opt.run = -1;
+    } else {
+      MPI_Comm_rank(opt.run_com, & opt.run_rank);
+      MPI_Comm_size(opt.run_com, & opt.run_mpi_size);
+    }
+  } else {
+    FATAL("Configured to do less than one run\n");
+  }
+
+  DEBUG_ALL("MPI Setup complete, I am global rank %d, run rank %d, in run %d, global size %d, run size %d\n", opt.rank, opt.run_rank, opt.run, opt.mpi_size, opt.run_mpi_size);
+
   if(verify_only){
     if(argc == 3){
       FATAL("--verify option requires the output file as last parameter!");
@@ -300,7 +341,7 @@ int main(int argc, char ** argv){
   prepare_aiori();
 
   FILE * res_summary = NULL;
-  if(opt.rank == 0){
+  if(opt.run_rank == 0){
     char file[PATH_MAX];
     sprintf(file, "%s/result_summary.txt", opt.resdir);
     res_summary = fopen(file, "w");
@@ -313,7 +354,7 @@ int main(int argc, char ** argv){
       FATAL("Could not open \"%s\" for writing (%s)\n", file, strerror(errno));
     }
     fprintf(file_out, "[run]\n");    
-    PRINT_PAIR("procs", "%d\n", opt.mpi_size);
+    PRINT_PAIR("procs", "%d\n", opt.run_mpi_size);
     sprintf(file, "%s/config-orig.ini", opt.resdir);
     FILE * fd = fopen(file, "w");
     fwrite(ini_data, strlen(ini_data), 1, fd);
@@ -325,7 +366,7 @@ int main(int argc, char ** argv){
   PRINT_PAIR("result-dir", "%s\n", opt.resdir);
   PRINT_PAIR("mode", "%s\n", io500_mode_str(opt.mode));
 
-  if(opt.rank == 0){
+  if(opt.run_rank == 0){
     // create configuration in result directory to ensure it is preserved
     char file[PATH_MAX];
     sprintf(file, "%s/config.ini", opt.resdir);
@@ -345,7 +386,7 @@ int main(int argc, char ** argv){
   }
 
   MPI_Barrier(MPI_COMM_WORLD);
-  if(opt.verbosity > 0 && opt.rank == 0){
+  if(opt.verbosity > 0 && opt.run_rank == 0){
     fprintf(file_out, "; START ");
     u_print_timestamp(file_out);
     fprintf(file_out, "\n");
@@ -358,12 +399,15 @@ int main(int argc, char ** argv){
 
   dupprintf("IO500 version %s (%s)\n", VERSION, io500_mode_str(opt.mode));
 
-  for(int i=0; i < IO500_PHASES; i++){
-    if(RUN_PHASE(phases[i]) && phases[i]->validate){
-      phases[i]->validate();
+  if(opt.run != -1){
+    for(int i=0; i < IO500_PHASES; i++){
+      if(RUN_PHASE(phases[i]) && phases[i]->validate){
+        phases[i]->validate();
+      }
     }
   }
-  if(opt.rank == 0){
+
+  if(opt.run_rank == 0){
     fprintf(file_out, "\n");
   }
 
@@ -375,12 +419,12 @@ int main(int argc, char ** argv){
       continue;
     }
 
-    if(opt.drop_caches && ! (phase->type & IO500_PHASE_DUMMY) ){
+    if(opt.drop_caches && ! (phase->type & IO500_PHASE_DUMMY) && opt.run != -1){
       DEBUG_INFO("Dropping cache\n");
-      if(opt.rank == 0)
+      if(opt.run_rank == 0)
         u_call_cmd("LANG=C free -m");
       u_call_cmd(opt.drop_caches_cmd);
-      if(opt.rank == 0)
+      if(opt.run_rank == 0)
         u_call_cmd("LANG=C free -m");
     }
   
@@ -422,12 +466,15 @@ int main(int argc, char ** argv){
       MPI_Barrier(MPI_COMM_WORLD);
     }
 
+    // If this process is not actually in any run, just skip to the next MPI barrier
+    if(opt.run == -1) continue;
+
     double start = GetTimeStamp();
     opt.is_valid_phase = 1;
     double score = phase->run();
     double runtime = GetTimeStamp() - start;
 
-    if(opt.rank == 0){
+    if(opt.run_rank == 0){
       // This is an additional sanity check
       if(! opt.dry_run){
         if( phases[i]->verify_stonewall && runtime < opt.stonewall ){
@@ -468,7 +515,7 @@ int main(int argc, char ** argv){
     phases[i]->score = score;
 
 
-    if(opt.verbosity > 0 && opt.rank == 0){
+    if(opt.verbosity > 0 && opt.run_rank == 0){
       PRINT_PAIR("t_delta", "%.4f\n", runtime);
       PRINT_PAIR_HEADER("t_end");
       u_print_timestamp(file_out);
@@ -477,7 +524,7 @@ int main(int argc, char ** argv){
   }
 
   MPI_Barrier(MPI_COMM_WORLD);
-  if(opt.rank == 0){
+  if(opt.run_rank == 0){
     char * valid_str = opt.is_valid_run ? "" : " [INVALID]";
     // compute the overall score
     fprintf(file_out, "\n[SCORE]\n");
@@ -509,18 +556,20 @@ int main(int argc, char ** argv){
     printf("\nThe result files are stored in the directory: %s\n", opt.resdir);
   }
 
-  for(int i=0; i < IO500_PHASES; i++){
-    if(RUN_PHASE(phases[i]) && phases[i]->cleanup){
-      phases[i]->cleanup();
+  if(opt.run != -1){
+    for(int i=0; i < IO500_PHASES; i++){
+      if(RUN_PHASE(phases[i]) && phases[i]->cleanup){
+        phases[i]->cleanup();
+      }
     }
   }
 
-  if(opt.rank == 0){
+  if(opt.run_rank == 0){
     fclose(res_summary);
     u_purge_datadir("");
   }
 
-  if(opt.rank == 0 && opt.verbosity > 0){
+  if(opt.run_rank == 0 && opt.verbosity > 0){
     fprintf(file_out, "; END ");
     u_print_timestamp(file_out);
     fprintf(file_out, "\n");

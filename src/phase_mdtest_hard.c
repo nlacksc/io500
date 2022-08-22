@@ -16,13 +16,13 @@ static ini_option_t option[] = {
   {NULL} };
 
 static void validate(void){
-  if(mdtest_hard_o.g.files_per_dir != INI_UNSET_UINT64 && mdtest_hard_o.g.files_per_dir > 0 && opt.rank == 0){
+  if(mdtest_hard_o.g.files_per_dir != INI_UNSET_UINT64 && mdtest_hard_o.g.files_per_dir > 0 && opt.run_rank == 0){
       INVALID("files-per-dir is set\n");
   }
 }
 
 static void cleanup(void){
-  if( ! opt.dry_run && opt.rank == 0){
+  if( ! opt.dry_run && opt.run_rank == 0){
     char filename[PATH_MAX];
     sprintf(filename, "%s/mdtest-hard.stonewall", opt.resdir);
     unlink(filename);
