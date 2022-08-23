@@ -429,10 +429,12 @@ int main(int argc, char ** argv){
     }
   
     MPI_Barrier(MPI_COMM_WORLD);
-    if(opt.rank == 0){
+    if(opt.run_rank == 0){
       fprintf(file_out, "\n[%s]\n", phase->name);
-      
-      if(opt.pause_dir){
+    }
+
+    if(opt.pause_dir){
+      if(opt.rank == 0){
         // if the file exists
         char path[PATH_MAX];
         int ret; 
@@ -453,17 +455,15 @@ int main(int argc, char ** argv){
           sleep(1);
         }
         MPI_Barrier(MPI_COMM_WORLD);
-      }
-      
-      if(opt.verbosity > 0){
-        PRINT_PAIR_HEADER("t_start");
-        u_print_timestamp(file_out);
-        fprintf(file_out, "\n");
+      } else {
+        MPI_Barrier(MPI_COMM_WORLD);
       }
     }
-
-    if(opt.pause_dir && opt.rank != 0){
-      MPI_Barrier(MPI_COMM_WORLD);
+      
+    if(opt.run_rank == 0 && opt.verbosity > 0){
+      PRINT_PAIR_HEADER("t_start");
+      u_print_timestamp(file_out);
+      fprintf(file_out, "\n");
     }
 
     // If this process is not actually in any run, just skip to the next MPI barrier
