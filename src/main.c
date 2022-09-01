@@ -303,7 +303,7 @@ int main(int argc, char ** argv){
     if(idle_processes != 0){
       WARNING("MPI world size (%d) is not divisible by number of parallel runs (%d), %d process(es) will be idle\n", opt.mpi_size, opt.parallel_runs,  idle_processes);
     }
-    opt.run = opt.rank % opt.parallel_runs;
+    opt.run = opt.rank / (opt.mpi_size / opt.parallel_runs);
     if(opt.rank >= opt.mpi_size-idle_processes){
       opt.run = MPI_UNDEFINED;
     }
