@@ -31,7 +31,9 @@ typedef struct{
   int run_mpi_size;
   int parallel_runs;
   int run;
-  int io_buffers_on_gpu; /* are the I/O buffers to be allocated on a GPU */
+
+  int allocateBufferDevice; /* where are the I/O buffers allocated and processed */
+  int gpuDirect; /* useGPUDirect */
 
   char * api;
   char * apiArgs; // for IOR and mdtest
