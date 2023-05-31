@@ -43,6 +43,9 @@ void ior_rnd4K_add_params(u_argv_t * argv){
     u_argv_push_printf(argv, "allocateBufferOnGPU=%d", opt.allocateBufferDevice);
     if(opt.gpuDirect){
       u_argv_push(argv, "--gpuDirect");
+      if(strcmp(opt.api,"POSIX")==0){
+        u_argv_push(argv, "--posix.odirect");
+      }
     }
   }
   u_argv_push(argv, "-Q=1");
